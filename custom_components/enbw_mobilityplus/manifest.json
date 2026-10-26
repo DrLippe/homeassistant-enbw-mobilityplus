@@ -1,6 +1,6 @@
 {
-  "domain": "charge_provider",
-  "name": "Charge Provider",
+  "domain": "enbw_mobilityplus",
+  "name": "EnBW mobility+",
   "codeowners": ["@DrLippe"],
   "config_flow": true,
   "documentation": "https://github.com/DrLippe/homeassistant-enbw-mobilityplus",

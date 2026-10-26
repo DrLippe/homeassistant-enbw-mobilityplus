@@ -1,4 +1,4 @@
-"""Provider-neutral charging data contract."""
+"""Charging history data models."""
 
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -22,7 +22,7 @@ class ChargeSession:
 
 @dataclass(frozen=True)
 class ProviderSnapshot:
-    """Normalized values common to all providers.
+    """EnBW charging history and optional live values.
 
     Unknown live values remain None; completed history cannot determine live state.
     """

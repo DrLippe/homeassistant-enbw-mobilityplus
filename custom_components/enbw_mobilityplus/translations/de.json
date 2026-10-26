@@ -1,8 +1,7 @@
 {
   "config": {
     "step": {
-      "user": {"menu_options": {"enbw": "EnBW mobility+"}},
-      "enbw": {"title": "EnBW mobility+", "description": "Melde dich mit deinem EnBW mobility+ Konto an.", "data": {"email": "E-Mail-Adresse", "password": "Passwort"}}
+      "user": {"title": "EnBW mobility+", "description": "Melde dich mit deinem EnBW mobility+ Konto an.", "data": {"email": "E-Mail-Adresse", "password": "Passwort"}}
     },
     "error": {"cannot_connect": "Anmeldung oder Abruf der Ladehistorie fehlgeschlagen."},
     "abort": {"already_configured": "Dieses Konto wurde bereits eingerichtet."}

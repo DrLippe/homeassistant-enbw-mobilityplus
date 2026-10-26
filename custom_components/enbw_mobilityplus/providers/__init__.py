@@ -1,0 +1,1 @@
+"""EnBW API client adapter."""

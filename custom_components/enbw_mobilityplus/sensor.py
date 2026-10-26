@@ -1,4 +1,4 @@
-"""Unified charging metrics for every configured provider account."""
+"""EnBW mobility+ charging metrics."""
 
 from dataclasses import dataclass
 from typing import Callable
@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import ChargeCoordinator
-from .const import CONF_PROVIDER, DOMAIN
+from .const import DOMAIN
 from .model import ProviderSnapshot
 
 
@@ -39,7 +39,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class ChargeSensor(CoordinatorEntity[ChargeCoordinator], SensorEntity):
-    """Standard key names remain the same for future Ionity/EWE/Aral adapters."""
+    """Charging metrics of an EnBW mobility+ account."""
 
     entity_description: ChargeSensorDescription
     _attr_has_entity_name = True
@@ -51,7 +51,7 @@ class ChargeSensor(CoordinatorEntity[ChargeCoordinator], SensorEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
-            manufacturer="EnBW" if entry.data[CONF_PROVIDER] == "enbw" else entry.data[CONF_PROVIDER],
+            manufacturer="EnBW",
             model="Charging account",
         )
 

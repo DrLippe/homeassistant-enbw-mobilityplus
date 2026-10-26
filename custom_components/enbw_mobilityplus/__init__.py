@@ -1,14 +1,13 @@
-"""Multi-provider charging history integration."""
+"""EnBW mobility+ charging history integration."""
 
 import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CONF_PROVIDER, DOMAIN, POLL_INTERVAL, PROVIDER_ENBW
+from .const import DOMAIN, POLL_INTERVAL
 from .providers.enbw import EnBWProvider
 
 PLATFORMS = [Platform.SENSOR]
@@ -16,7 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ChargeCoordinator(DataUpdateCoordinator):
-    """One update coordinator per provider account."""
+    """One update coordinator per EnBW account."""
 
     def __init__(self, hass: HomeAssistant, provider: EnBWProvider, name: str) -> None:
         super().__init__(hass, logger=_LOGGER, name=name, update_interval=POLL_INTERVAL)
@@ -31,12 +30,10 @@ class ChargeCoordinator(DataUpdateCoordinator):
                 await self.hass.async_add_executor_job(self.provider.refresh_login)
                 return await self.hass.async_add_executor_job(self.provider.fetch)
             except Exception as retry_exc:
-                raise UpdateFailed("Failed to update charging provider") from retry_exc
+                raise UpdateFailed("Failed to update EnBW mobility+") from retry_exc
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    if entry.data[CONF_PROVIDER] != PROVIDER_ENBW:
-        raise ConfigEntryNotReady("Unsupported charging provider")
     provider = EnBWProvider(entry.data[CONF_EMAIL], entry.data[CONF_PASSWORD])
     coordinator = ChargeCoordinator(hass, provider, entry.title)
     try:
