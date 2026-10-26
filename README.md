@@ -2,6 +2,8 @@
 
 Dedicated Home Assistant integration for **EnBW mobility+** (`enbw_mobilityplus`). Other charging providers are intentionally outside the scope of this repository.
 
+The integration includes the EnBW mobility+ app icon in `custom_components/enbw_mobilityplus/brand/icon.png` for Home Assistant 2026.3 and newer.
+
 ## Install
 
 1. In HACS → Custom repositories, add `https://github.com/DrLippe/homeassistant-enbw-mobilityplus` as an **Integration**.
