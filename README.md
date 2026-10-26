@@ -24,7 +24,18 @@ Dedicated Home Assistant integration for **EnBW mobility+** (`enbw_mobilityplus`
 
 Data is refreshed every 30 minutes. History pagination is capped at 10,000 records as a safety limit. Totals reflect the history returned by EnBW, not necessarily all lifetime consumption if EnBW truncates its history. A sensor will be unavailable if its initial fetch fails.
 
-The upstream client currently **does not** offer tariff details, active charging session state, plugged-in status, or real-time charger power. These are not inferred from old sessions.
+### Active charging monitor
+
+The integration additionally polls `GET /v2/chargings/active` every 60 seconds, as identified in the EnBW Android application. It provides:
+
+- **Ladevorgang aktiv** (binary sensor), true when the API reports at least one active session
+- **Ladestatus** (`Inaktiv`, `Aktiv`, `Ende wird geprüft`, `Beendet`). `Beendet` requires two consecutive successful empty monitor responses following a previously active session; it remains until another session starts, but resets after a restart
+- **Letzte gemeldete Ladeleistung** (kW), **Aktuell geladene Energie** (kWh), optional **Fahrzeug-Ladestand** (%), **Aktuelle Ladedauer** (min), **Aktuelle Ladekosten** (EUR) and **Ladeort** (address)
+- **Letztes Ladeende** from the completed-session history (which can lag behind the live status)
+
+On a confirmed completion the integration fires `enbw_mobilityplus_charge_completed` with `transaction_id` (if EnBW supplies it). Live measurements are unknown when no session is active, not zero. If the live endpoint fails, live entities become unavailable without disabling the established historical sensors.
+
+**Important:** The EnBW response does **not** report whether a cable is physically plugged in. The active-session binary sensor is *not* a physical `eingesteckt` sensor. Similarly, `lastChargingPowerInKw` is the **last reported** charging power and need not represent instantaneous electrical flow. When multiple sessions are active, the individual live values display the first API entry.
 
 ## Implementation
 

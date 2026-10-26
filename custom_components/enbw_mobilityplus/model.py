@@ -35,3 +35,29 @@ class ProviderSnapshot:
     connected: bool | None = None
     charging: bool | None = None
     tariff: str | None = None
+
+
+@dataclass(frozen=True)
+class ActiveCharge:
+    """Values exposed by EnBW's active charging monitor (nullable upstream)."""
+
+    transaction_id: str | None
+    evse_id: str | None
+    location: str | None
+    operator: str | None
+    power_kw: float | None
+    energy_kwh: float | None
+    soc_percent: int | None
+    duration_seconds: int | None
+    cost_eur: float | None
+
+
+@dataclass(frozen=True)
+class LiveSnapshot:
+    """All simultaneously active sessions; not a physical cable sensor."""
+
+    sessions: tuple[ActiveCharge, ...]
+
+    @property
+    def primary(self) -> ActiveCharge | None:
+        return self.sessions[0] if self.sessions else None

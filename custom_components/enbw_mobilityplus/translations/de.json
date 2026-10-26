@@ -14,6 +14,16 @@
     "last_energy": {"name": "Letzte Ladeenergie"},
     "last_cost": {"name": "Letzte Ladekosten"},
     "last_station": {"name": "Letzte Ladestation"},
-    "last_duration": {"name": "Letzte Ladedauer"}
+    "last_duration": {"name": "Letzte Ladedauer"},
+    "last_end": {"name": "Letztes Ladeende"},
+    "charging_status": {"name": "Ladestatus"},
+    "charging_power": {"name": "Letzte gemeldete Ladeleistung"},
+    "charging_energy": {"name": "Aktuell geladene Energie"},
+    "charging_soc": {"name": "Fahrzeug-Ladestand"},
+    "charging_duration": {"name": "Aktuelle Ladedauer"},
+    "charging_cost": {"name": "Aktuelle Ladekosten"},
+    "charging_location": {"name": "Ladeort"}
+  }, "binary_sensor": {
+    "active_session": {"name": "Ladevorgang aktiv"}
   }}
 }

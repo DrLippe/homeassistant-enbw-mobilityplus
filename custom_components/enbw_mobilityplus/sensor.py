@@ -11,9 +11,9 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import ChargeCoordinator
+from . import ChargeCoordinator, LiveCoordinator
 from .const import DOMAIN
-from .model import ProviderSnapshot
+from .model import LiveSnapshot, ProviderSnapshot
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -30,12 +30,23 @@ SENSORS = (
     ChargeSensorDescription(key="last_cost", translation_key="last_cost", native_unit_of_measurement="EUR", device_class=SensorDeviceClass.MONETARY, extract=lambda data: data.last_session.cost_eur if data.last_session else None),
     ChargeSensorDescription(key="last_station", translation_key="last_station", extract=lambda data: data.last_session.station if data.last_session else None),
     ChargeSensorDescription(key="last_duration", translation_key="last_duration", native_unit_of_measurement="min", extract=lambda data: round(data.last_session.duration_seconds / 60, 1) if data.last_session and data.last_session.duration_seconds is not None else None),
+    ChargeSensorDescription(key="last_end", translation_key="last_end", device_class=SensorDeviceClass.TIMESTAMP, extract=lambda data: data.last_session.stopped_at if data.last_session else None),
+)
+
+LIVE_SENSORS = (
+    ChargeSensorDescription(key="charging_status", translation_key="charging_status", extract=lambda data: None),
+    ChargeSensorDescription(key="charging_power", translation_key="charging_power", native_unit_of_measurement="kW", device_class=SensorDeviceClass.POWER, extract=lambda data: data.primary.power_kw if data.primary else None),
+    ChargeSensorDescription(key="charging_energy", translation_key="charging_energy", native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR, device_class=SensorDeviceClass.ENERGY, extract=lambda data: data.primary.energy_kwh if data.primary else None),
+    ChargeSensorDescription(key="charging_soc", translation_key="charging_soc", native_unit_of_measurement="%", device_class=SensorDeviceClass.BATTERY, extract=lambda data: data.primary.soc_percent if data.primary else None),
+    ChargeSensorDescription(key="charging_duration", translation_key="charging_duration", native_unit_of_measurement="min", extract=lambda data: round(data.primary.duration_seconds / 60, 1) if data.primary and data.primary.duration_seconds is not None else None),
+    ChargeSensorDescription(key="charging_cost", translation_key="charging_cost", native_unit_of_measurement="EUR", device_class=SensorDeviceClass.MONETARY, extract=lambda data: data.primary.cost_eur if data.primary else None),
+    ChargeSensorDescription(key="charging_location", translation_key="charging_location", extract=lambda data: data.primary.location if data.primary else None),
 )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(ChargeSensor(coordinator, entry, description) for description in SENSORS)
+    coordinators = hass.data[DOMAIN][entry.entry_id]
+    async_add_entities([ChargeSensor(coordinators["history"], entry, description) for description in SENSORS] + [LiveChargeSensor(coordinators["live"], entry, description) for description in LIVE_SENSORS])
 
 
 class ChargeSensor(CoordinatorEntity[ChargeCoordinator], SensorEntity):
@@ -73,3 +84,23 @@ class ChargeSensor(CoordinatorEntity[ChargeCoordinator], SensorEntity):
             "station": session.station,
             **session.details,
         }
+
+
+class LiveChargeSensor(ChargeSensor):
+    """Live readings; unavailable if EnBW's monitor cannot be queried."""
+
+    def __init__(self, coordinator: LiveCoordinator, entry: ConfigEntry, description: ChargeSensorDescription) -> None:
+        super().__init__(coordinator, entry, description)
+
+    @property
+    def native_value(self):
+        if self.entity_description.key == "charging_status":
+            return {"idle": "Inaktiv", "active": "Aktiv", "end_pending": "Ende wird geprüft", "completed": "Beendet"}[self.coordinator.status]
+        return self.entity_description.extract(self.coordinator.data)
+
+    @property
+    def extra_state_attributes(self):
+        session = self.coordinator.data.primary
+        if self.entity_description.key == "charging_status" and session:
+            return {"transaction_id": session.transaction_id, "evse_id": session.evse_id, "operator": session.operator}
+        return None
