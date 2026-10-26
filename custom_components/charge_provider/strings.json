@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {"menu_options": {"enbw": "EnBW mobility+"}},
+      "enbw": {"title": "EnBW mobility+", "description": "Melde dich mit deinem EnBW mobility+ Konto an.", "data": {"email": "E-Mail-Adresse", "password": "Passwort"}}
+    },
+    "error": {"cannot_connect": "Anmeldung oder Abruf der Ladehistorie fehlgeschlagen."},
+    "abort": {"already_configured": "Dieses Konto wurde bereits eingerichtet."}
+  },
+  "entity": {"sensor": {
+    "total_energy": {"name": "Gesamte Ladeenergie"},
+    "total_cost": {"name": "Gesamtkosten"},
+    "total_sessions": {"name": "Ladevorgänge gesamt"},
+    "last_charge": {"name": "Letzter Ladevorgang"},
+    "last_energy": {"name": "Letzte Ladeenergie"},
+    "last_cost": {"name": "Letzte Ladekosten"},
+    "last_station": {"name": "Letzte Ladestation"},
+    "last_duration": {"name": "Letzte Ladedauer"}
+  }}
+}
