@@ -49,6 +49,7 @@ class ActiveMonitorTest(unittest.TestCase):
         response = Mock()
         response.json.return_value = {"activeChargingSessions": [{
             "transactionId": "abc", "evseId": "DE*ABC", "address": "Kassel",
+            "chargePointType": "DC",
             "lastChargingPowerInKw": 48.5, "energyInKwh": 12.3,
             "batteryStateOfChargeInPercent": 75,
             "durationInSeconds": 900, "totalCostInEur": 7.5,
@@ -59,6 +60,7 @@ class ActiveMonitorTest(unittest.TestCase):
         self.assertEqual(live.primary.location, "Kassel")
         self.assertEqual(live.primary.power_kw, 48.5)
         self.assertEqual(live.primary.soc_percent, 75)
+        self.assertEqual(live.primary.charge_point_type, "DC")
         client.client.get.assert_called_once_with(
             "https://api.example.invalid/emobility-complete/api/v2/chargings/active",
             headers={"authorization": "test"},

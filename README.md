@@ -34,6 +34,7 @@ The integration additionally polls `GET /v2/chargings/active` every 60 seconds, 
 - **Ladestatus** (`Inaktiv`, `Aktiv`, `Ende wird geprüft`, `Beendet`). `Beendet` requires two consecutive successful empty monitor responses following a previously active session; it remains until another session starts, but resets after a restart
 - **Letzte gemeldete Ladeleistung** (kW), **Aktuell geladene Energie** (kWh), optional **Fahrzeug-Ladestand** (%), **Aktuelle Ladedauer** (min), **Aktuelle Ladekosten** (EUR) and **Ladeort** (address)
 - **Letztes Ladeende** from the completed-session history (which can lag behind the live status)
+- **Ladeart** (`AC`, `DC`, `Unbekannt`) from the active session's `chargePointType`, or the latest completed session's connector type if idle. Attributes `api_wert` and `datenquelle` show the original field and whether the result comes from the live monitor or history. Unrecognized connector types remain `Unbekannt` rather than being guessed from charging power.
 
 On a confirmed completion the integration fires `enbw_mobilityplus_charge_completed` with `transaction_id` (if EnBW supplies it). Live measurements are unknown when no session is active, not zero. If the live endpoint fails, live entities become unavailable without disabling the established historical sensors.
 

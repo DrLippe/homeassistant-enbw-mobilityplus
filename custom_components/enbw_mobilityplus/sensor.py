@@ -13,6 +13,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import ChargeCoordinator, LiveCoordinator
 from .const import DOMAIN
+from .charge_type import normalize_charge_type
 from .model import LiveSnapshot, ProviderSnapshot
 
 
@@ -46,7 +47,7 @@ LIVE_SENSORS = (
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinators = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([ChargeSensor(coordinators["history"], entry, description) for description in SENSORS] + [LiveChargeSensor(coordinators["live"], entry, description) for description in LIVE_SENSORS])
+    async_add_entities([ChargeSensor(coordinators["history"], entry, description) for description in SENSORS] + [LiveChargeSensor(coordinators["live"], entry, description) for description in LIVE_SENSORS] + [EnBWChargeTypeSensor(coordinators["history"], coordinators["live"], entry)])
 
 
 class ChargeSensor(CoordinatorEntity[ChargeCoordinator], SensorEntity):
@@ -104,3 +105,48 @@ class LiveChargeSensor(ChargeSensor):
         if self.entity_description.key == "charging_status" and session:
             return {"transaction_id": session.transaction_id, "evse_id": session.evse_id, "operator": session.operator}
         return None
+
+
+class EnBWChargeTypeSensor(SensorEntity):
+    """Use the active connector type, falling back to latest completed history."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_translation_key = "charge_type"
+
+    def __init__(self, history: ChargeCoordinator, live: LiveCoordinator, entry: ConfigEntry) -> None:
+        self.history = history
+        self.live = live
+        self._attr_unique_id = f"{entry.entry_id}_charge_type"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.title,
+            manufacturer="EnBW",
+            model="Charging account",
+        )
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self.history.async_add_listener(self.async_write_ha_state))
+        self.async_on_remove(self.live.async_add_listener(self.async_write_ha_state))
+
+    @property
+    def available(self) -> bool:
+        return self.history.last_update_success or self.live.last_update_success
+
+    def _source(self) -> tuple[str | None, str | None]:
+        if self.live.last_update_success and self.live.data and self.live.data.primary:
+            return self.live.data.primary.charge_point_type, "Aktiver Ladevorgang"
+        if self.history.last_update_success and self.history.data and self.history.data.last_session:
+            return self.history.data.last_session.details.get("plug_type"), "Letzter abgeschlossener Ladevorgang"
+        return None, None
+
+    @property
+    def native_value(self) -> str:
+        raw, _source = self._source()
+        return normalize_charge_type(raw) or "Unbekannt"
+
+    @property
+    def extra_state_attributes(self):
+        raw, source = self._source()
+        return {"api_wert": raw, "datenquelle": source}

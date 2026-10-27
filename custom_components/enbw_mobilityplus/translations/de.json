@@ -22,7 +22,8 @@
     "charging_soc": {"name": "Fahrzeug-Ladestand"},
     "charging_duration": {"name": "Aktuelle Ladedauer"},
     "charging_cost": {"name": "Aktuelle Ladekosten"},
-    "charging_location": {"name": "Ladeort"}
+    "charging_location": {"name": "Ladeort"},
+    "charge_type": {"name": "Ladeart"}
   }, "binary_sensor": {
     "active_session": {"name": "Ladevorgang aktiv"}
   }}

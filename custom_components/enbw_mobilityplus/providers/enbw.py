@@ -116,6 +116,7 @@ class EnBWProvider:
                         soc_percent=item.get("batteryStateOfChargeInPercent"),
                         duration_seconds=item.get("durationInSeconds"),
                         cost_eur=item.get("totalCostInEur"),
+                        charge_point_type=item.get("chargePointType"),
                     )
                 )
             return LiveSnapshot(tuple(sessions))

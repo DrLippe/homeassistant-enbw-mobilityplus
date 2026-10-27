@@ -50,6 +50,7 @@ class ActiveCharge:
     soc_percent: int | None
     duration_seconds: int | None
     cost_eur: float | None
+    charge_point_type: str | None = None
 
 
 @dataclass(frozen=True)

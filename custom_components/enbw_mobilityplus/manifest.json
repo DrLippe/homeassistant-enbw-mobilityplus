@@ -7,5 +7,5 @@
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "requirements": ["enbw-mobilityplus-client==1.0.0"],
-  "version": "0.2.0"
+  "version": "0.2.1"
 }
