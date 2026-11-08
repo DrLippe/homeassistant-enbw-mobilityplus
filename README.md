@@ -47,3 +47,15 @@ On a confirmed completion the integration fires `enbw_mobilityplus_charge_comple
 **Migration note:** If you installed an earlier development version under `charge_provider`, remove that integration and its custom component before installing this version. Home Assistant treats `enbw_mobilityplus` as a new integration domain, so entity identifiers may change.
 
 The client is an unofficial reverse-engineered API implementation, distributed under the MIT license. This integration is not endorsed by EnBW. Use only your own account and respect the service's terms and limits. Credentials are saved in Home Assistant's config-entry storage; never share configuration backups containing credentials.
+
+## Authentication and troubleshooting
+
+Access tokens are refreshed using the upstream client's refresh-token grant shortly before expiry (two-minute margin). If EnBW rejects a request with HTTP 401, the integration first refreshes and retries; if authorization still fails or the refresh token is invalid, it performs a new email/password login. HTTP 403 and unrelated network/server errors are **not** treated as expired tokens. Sessions and tokens live in memory; credentials remain in Home Assistant's config entry.
+
+Setup, configuration-flow, historical and live-request errors are logged under `custom_components.enbw_mobilityplus` with the failing stage and, where available, HTTP status. Server response bodies, passwords and tokens are deliberately omitted. In Home Assistant, inspect **Settings → System → Logs**, or add the following temporarily for more detailed log context:
+
+```yaml
+logger:
+  logs:
+    custom_components.enbw_mobilityplus: debug
+```

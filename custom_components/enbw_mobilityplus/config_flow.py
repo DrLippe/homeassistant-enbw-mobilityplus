@@ -1,12 +1,16 @@
 """EnBW mobility+ configuration flow."""
 
+import logging
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 
 from .const import DOMAIN
+from .diagnostics import diagnostic_message
 from .providers.enbw import EnBWProvider
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class EnBWMobilityPlusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -23,7 +27,8 @@ class EnBWMobilityPlusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             provider = EnBWProvider(email, user_input[CONF_PASSWORD])
             try:
                 await self.hass.async_add_executor_job(provider.fetch)
-            except Exception:  # API failures vary across backend versions
+            except Exception as exc:  # API failures vary across backend versions
+                _LOGGER.error("EnBW mobility+ Einrichtung/Anmeldung fehlgeschlagen: %s", diagnostic_message(exc))
                 errors["base"] = "cannot_connect"
             else:
                 return self.async_create_entry(

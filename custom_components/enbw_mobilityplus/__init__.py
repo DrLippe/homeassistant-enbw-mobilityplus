@@ -1,7 +1,6 @@
 """EnBW mobility+ charging history integration."""
 
 import logging
-import httpx
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
@@ -9,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, LIVE_POLL_INTERVAL, POLL_INTERVAL
+from .diagnostics import diagnostic_message
 from .providers.enbw import EnBWProvider
 
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR]
@@ -25,13 +25,10 @@ class ChargeCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         try:
             return await self.hass.async_add_executor_job(self.provider.fetch)
-        except Exception:
-            # A fresh client recovers expired credentials/cookies once.
-            try:
-                await self.hass.async_add_executor_job(self.provider.refresh_login)
-                return await self.hass.async_add_executor_job(self.provider.fetch)
-            except Exception as retry_exc:
-                raise UpdateFailed("Failed to update EnBW mobility+") from retry_exc
+        except Exception as exc:
+            detail = diagnostic_message(exc)
+            _LOGGER.error("EnBW mobility+ Ladehistorie konnte nicht abgerufen werden: %s", detail)
+            raise UpdateFailed(f"EnBW Ladehistorie: {detail}") from None
 
 
 class LiveCoordinator(DataUpdateCoordinator):
@@ -47,16 +44,10 @@ class LiveCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         try:
             snapshot = await self.hass.async_add_executor_job(self.provider.fetch_active)
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code not in (401, 403):
-                raise UpdateFailed(f"EnBW live endpoint returned HTTP {exc.response.status_code}") from exc
-            try:
-                await self.hass.async_add_executor_job(self.provider.refresh_login)
-                snapshot = await self.hass.async_add_executor_job(self.provider.fetch_active)
-            except Exception as exc:
-                raise UpdateFailed("Failed to update active EnBW sessions") from exc
         except Exception as exc:
-            raise UpdateFailed("Failed to update active EnBW sessions") from exc
+            detail = diagnostic_message(exc)
+            _LOGGER.error("EnBW mobility+ Live-Abfrage fehlgeschlagen: %s", detail)
+            raise UpdateFailed(f"EnBW Live-Abfrage: {detail}") from None
 
         ids = {session.transaction_id for session in snapshot.sessions if session.transaction_id}
         if snapshot.sessions:
@@ -88,7 +79,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await coordinator.async_config_entry_first_refresh()
         # An undocumented live endpoint must not break existing history sensors.
         await live.async_refresh()
-    except Exception:
+    except Exception as exc:
+        _LOGGER.error("EnBW mobility+ Einrichtung nicht abgeschlossen: %s", diagnostic_message(exc))
         await hass.async_add_executor_job(provider.close)
         raise
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"history": coordinator, "live": live}

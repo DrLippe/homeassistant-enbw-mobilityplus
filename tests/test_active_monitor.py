@@ -20,8 +20,14 @@ def load_provider():
     fake_upstream = types.ModuleType("enbw_mobilityplus_client")
     fake_upstream.EnBWMobilityPlusClient = Mock
     sys.modules["enbw_mobilityplus_client"] = fake_upstream
+    fake_httpx = types.ModuleType("httpx")
+    fake_httpx.HTTPStatusError = type("HTTPStatusError", (Exception,), {})
+    fake_httpx.TimeoutException = type("TimeoutException", (Exception,), {})
+    fake_httpx.ConnectError = type("ConnectError", (Exception,), {})
+    sys.modules["httpx"] = fake_httpx
     for name, path in (
         ("enbw_test.model", ROOT / "model.py"),
+        ("enbw_test.diagnostics", ROOT / "diagnostics.py"),
         ("enbw_test.providers.enbw", ROOT / "providers" / "enbw.py"),
     ):
         spec = importlib.util.spec_from_file_location(name, path)
