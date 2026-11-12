@@ -2,7 +2,7 @@
 
 import logging
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -82,7 +82,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception as exc:
         _LOGGER.error("EnBW mobility+ Einrichtung nicht abgeschlossen: %s", diagnostic_message(exc))
         await hass.async_add_executor_job(provider.close)
-        raise
+        raise ConfigEntryNotReady("EnBW mobility+ login/API unavailable; will retry") from exc
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"history": coordinator, "live": live}
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
