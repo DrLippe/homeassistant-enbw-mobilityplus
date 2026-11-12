@@ -9,6 +9,7 @@ from typing import Callable, TypeVar
 from enbw_mobilityplus_client import EnBWMobilityPlusClient
 import httpx
 
+from ..auth_trace import attach_auth0_trace
 from ..diagnostics import diagnostic_message, is_unauthorized
 from ..model import ActiveCharge, ChargeSession, LiveSnapshot, ProviderSnapshot
 
@@ -36,6 +37,7 @@ class EnBWProvider:
     def _ensure_login(self) -> EnBWMobilityPlusClient:
         if self._client is None:
             client = EnBWMobilityPlusClient()
+            attach_auth0_trace(client)
             try:
                 token = client.login(self.email, self.password)
             except Exception:

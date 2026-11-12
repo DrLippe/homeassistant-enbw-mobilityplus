@@ -59,3 +59,17 @@ logger:
   logs:
     custom_components.enbw_mobilityplus: debug
 ```
+
+## Auth0 diagnostics (experimental branch)
+
+On branch `auth0-safe-diagnostics`, the existing mawiak client (v1.0.1) remains responsible for authentication. An HTTPX response hook reports the HTTP status and a fixed, allow-listed authentication step at INFO/DEBUG or WARNING level. Redirect targets are classified without exposing raw URLs. The hook does not inspect response bodies, request bodies, query strings, passwords, cookies, or tokens.
+
+To investigate HTTP 400 in Home Assistant, enable debug logging for `custom_components.enbw_mobilityplus.auth_trace` and perform **one** setup attempt. Share only the sanitised `EnBW Auth0 HTTP ...` lines; do not enable unfiltered `httpx` or `httpcore` debug logs or share raw HTTP captures.
+
+```yaml
+logger:
+  logs:
+    custom_components.enbw_mobilityplus.auth_trace: debug
+```
+
+The diagnostic branch does not fix the authentication flow and is not a HACS release.
