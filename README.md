@@ -73,3 +73,12 @@ logger:
 ```
 
 The diagnostic branch does not fix the authentication flow and is not a HACS release.
+
+### Extended Auth0 HTTP 400 diagnostics
+
+The response hook now records only boolean checks for OAuth state consistency
+(initial authorize state, request query, form and last loaded login page),
+Cookie presence and Referer consistency. These comparisons happen only in memory;
+no state values, passwords, session cookies, request/response bodies, or raw
+URLs are written to logs. Restart Home Assistant and perform one login attempt.
+The integration still uses mawiak 1.0.1 unchanged. This is diagnostic only.
