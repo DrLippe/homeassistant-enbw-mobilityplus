@@ -44,6 +44,44 @@ class OwnClientContractTest(unittest.TestCase):
         with self.assertRaises(MODULE.EnBWAuthError):
             self.client._redirect("https://myenergykey.com/", "https://attacker.example/")
 
+    def test_android_callback_pkce_parameters(self):
+        from urllib.parse import urlsplit, parse_qs
+        import base64
+        import hashlib
+        auth = self.client.begin_authorization()
+        params = parse_qs(urlsplit(auth.authorize_url).query)
+        self.assertEqual(params["redirect_uri"], [
+            "emob://myenergykey.com/android/com.enbw.ev/callback"])
+        self.assertEqual(params["state"], [auth.state])
+        self.assertEqual(params["nonce"], [auth.nonce])
+        self.assertEqual(params["code_challenge_method"], ["S256"])
+        expected = base64.urlsafe_b64encode(
+            hashlib.sha256(auth.verifier.encode()).digest()).rstrip(b"=").decode()
+        self.assertEqual(params["code_challenge"], [expected])
+
+    def test_finish_android_callback(self):
+        from unittest.mock import Mock
+        auth = self.client.begin_authorization()
+        self.client._token = Mock(return_value=MODULE.Token(3600))
+        self.client.load_profile = Mock()
+        result = self.client.complete_authorization(
+            f"emob://myenergykey.com/android/com.enbw.ev/callback"
+            f"?code=AUTHCODE&state={auth.state}", auth)
+        self.assertEqual(result.expires_in, 3600)
+        self.client._token.assert_called_once()
+        self.client.load_profile.assert_called_once()
+
+    def test_reject_wrong_callback_and_state(self):
+        auth = self.client.begin_authorization()
+        for callback in (
+            f"https://myenergykey.com/android/com.enbw.ev/callback?code=x&state={auth.state}",
+            f"emob://evil.example/android/com.enbw.ev/callback?code=x&state={auth.state}",
+            "emob://myenergykey.com/android/com.enbw.ev/callback?code=x&state=wrong",
+        ):
+            with self.subTest(callback=callback):
+                with self.assertRaises(MODULE.EnBWAuthError):
+                    self.client.complete_authorization(callback, auth)
+
     def test_history_parsing(self):
         self.client._json = lambda *args, **kwargs: {
             "chargingHistoryEntries": [{"startedAt": "2026-11-12T10:00:00+01:00", "energyInKwh": 3.7}]

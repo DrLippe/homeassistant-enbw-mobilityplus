@@ -10,6 +10,7 @@ import base64
 import hashlib
 import secrets
 from dataclasses import dataclass
+from urllib.parse import urlencode
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 import httpx
@@ -17,7 +18,7 @@ import httpx
 AUTH = "https://myenergykey.com"
 ROOT = "https://api.emp.emob-enbw.com/emobility-complete/api"
 CLIENT_ID = "MCVlPomnunRHO86S3Ju1JUJENA8hEI4i"
-REDIRECT = "com.enbw.ev://myenergykey.com/ios/com.enbw.ev/callback"
+REDIRECT = "emob://myenergykey.com/android/com.enbw.ev/callback"
 AUDIENCE = "https://pro-login.enbw.com/"
 SCOPE = "email offline_access openid"
 CUSTOM_SCOPE = (
@@ -40,6 +41,15 @@ class EnBWAuthError(ValueError):
 @dataclass(frozen=True)
 class Token:
     expires_in: int
+
+
+@dataclass(frozen=True)
+class OAuthRequest:
+    """Ephemeral PKCE credentials; do not persist or log verifier/state."""
+    authorize_url: str
+    verifier: str
+    state: str
+    nonce: str
 
 
 @dataclass(frozen=True)
@@ -100,6 +110,69 @@ class EnBWMobilityPlusClient:
             response = self.client.get(self._redirect(str(response.url), location))
         raise EnBWAuthError("redirect", reason="too_many_redirects")
 
+    @staticmethod
+    def begin_authorization() -> OAuthRequest:
+        """Build the Android Auth0/PKCE authorize URL from APK implementation."""
+        verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
+        challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+        state = secrets.token_urlsafe(32)
+        nonce = secrets.token_urlsafe(32)
+        params = {
+            "client_id": CLIENT_ID,
+            "redirect_uri": REDIRECT,
+            "response_type": "code",
+            "scope": SCOPE,
+            "audience": AUDIENCE,
+            "custom_scope": CUSTOM_SCOPE,
+            "viewsignup": "false",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "state": state,
+            "nonce": nonce,
+        }
+        return OAuthRequest(f"{AUTH}/authorize?{urlencode(params)}", verifier, state, nonce)
+
+    def complete_authorization(self, callback_url: str, request: OAuthRequest) -> Token:
+        """Accept only the exact native Android callback and matching OAuth state.
+
+        The callback contains a secret authorization code: it must never be logged.
+        """
+        target = urlsplit(callback_url)
+        if (target.scheme, target.hostname, target.path) != (
+            "emob", "myenergykey.com", "/android/com.enbw.ev/callback"
+        ):
+            raise EnBWAuthError("callback", reason="invalid_origin")
+        params = self._query(callback_url)
+        if "error" in params:
+            raise EnBWAuthError("callback", reason="authorization_denied")
+        if params.get("state", [None]) != [request.state]:
+            raise EnBWAuthError("callback", reason="state_mismatch")
+        codes = params.get("code", [])
+        if len(codes) != 1 or not codes[0]:
+            raise EnBWAuthError("callback", reason="code_missing")
+        token = self._token({
+            "grant_type": "authorization_code",
+            "code": codes[0],
+            "code_verifier": request.verifier,
+            "client_id": CLIENT_ID,
+            "redirect_uri": REDIRECT,
+        })
+        self.load_profile()
+        return token
+
+    def load_profile(self) -> None:
+        profiles = self._json("v1/profiles", with_account=False)
+        if not isinstance(profiles, list) or not profiles:
+            raise EnBWAuthError("profiles", reason="no_profile")
+        self.charging_account_id = next(
+            (profile.get("chargingAccountId") for profile in profiles
+             if profile.get("active") and profile.get("chargingAccountId")),
+            profiles[0].get("chargingAccountId"),
+        )
+        if not self.charging_account_id:
+            raise EnBWAuthError("profiles", reason="no_charging_account_id")
+
     def login(self, email, password):
         verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
         challenge = base64.urlsafe_b64encode(
@@ -154,12 +227,7 @@ class EnBWMobilityPlusClient:
             "grant_type": "authorization_code", "code": code,
             "code_verifier": verifier, "client_id": CLIENT_ID, "redirect_uri": REDIRECT,
         })
-        profiles = self._json("v1/profiles", with_account=False)
-        if not isinstance(profiles, list) or not profiles:
-            raise EnBWAuthError("profiles", reason="no_profile")
-        self.charging_account_id = profiles[0].get("chargingAccountId")
-        if not self.charging_account_id:
-            raise EnBWAuthError("profiles", reason="no_charging_account_id")
+        self.load_profile()
         return token
 
     def _token(self, data):
