@@ -77,6 +77,7 @@ class EnBWMobilityPlusClient:
         self.access_token = None
         self.refresh_token = None
         self.charging_account_id = None
+        self._backend_cookies: dict[str, str] = {}
 
     @staticmethod
     def _query(url):
@@ -158,8 +159,36 @@ class EnBWMobilityPlusClient:
             "client_id": CLIENT_ID,
             "redirect_uri": REDIRECT,
         })
+        self._bootstrap_backend()
         self.load_profile()
         return token
+
+    def _capture_backend_cookies(self, response) -> None:
+        """Carry load-balancer/session cookies across the EnBW API hostnames."""
+        for header in response.headers.get_list("set-cookie"):
+            pair = header.split(";", 1)[0]
+            if "=" not in pair:
+                continue
+            name, value = pair.split("=", 1)
+            if name in ("ARRAffinity", "ARRAffinitySameSite", "JSESSIONID") and value:
+                self._backend_cookies[name] = value
+
+    def _bootstrap_backend(self) -> None:
+        """Initialize EnBW's API affinity cookie before querying profiles."""
+        try:
+            response = self.client.get(
+                f"{ROOT}/v1/version",
+                params={
+                    "termsAndconditions": "07032023",
+                    "termsOfUse": "02052023",
+                    "privacy": "07032023",
+                },
+                headers={"apikey": API_KEY, "ocp-apim-subscription-key": SUBSCRIPTION_KEY},
+            )
+            self._capture_backend_cookies(response)
+        except httpx.RequestError:
+            # Not all accounts require this preliminary call.
+            pass
 
     def load_profile(self) -> None:
         profiles = self._json("v1/profiles", with_account=False)
@@ -172,6 +201,20 @@ class EnBWMobilityPlusClient:
         )
         if not self.charging_account_id:
             raise EnBWAuthError("profiles", reason="no_charging_account_id")
+        profile = next(
+            (p for p in profiles if p.get("chargingAccountId") == self.charging_account_id),
+            profiles[0],
+        )
+        if profile.get("id") is not None and profile.get("endUserId") is not None:
+            try:
+                response = self.client.get(
+                    "https://api.emp.emob-enbw.com/emobility-complete/b2b/v1/api/permissions",
+                    params={"profileId": profile["id"], "endUserId": profile["endUserId"]},
+                    headers=self._get_headers(include_charging_account=False),
+                )
+                self._capture_backend_cookies(response)
+            except httpx.RequestError:
+                pass
 
     def login(self, email, password):
         verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
@@ -260,6 +303,10 @@ class EnBWMobilityPlusClient:
         }
         if include_charging_account and self.charging_account_id:
             headers["charging-account-id"] = self.charging_account_id
+        if self._backend_cookies:
+            headers["cookie"] = "; ".join(
+                f"{key}={value}" for key, value in self._backend_cookies.items()
+            )
         return headers
 
     def _json(self, path, *, with_account=True, params=None):
@@ -267,6 +314,7 @@ class EnBWMobilityPlusClient:
             f"{ROOT}/{path}", params=params,
             headers=self._get_headers(include_charging_account=with_account))
         response.raise_for_status()
+        self._capture_backend_cookies(response)
         return response.json()
 
     def get_charging_history(self, limit=100, offset=0):

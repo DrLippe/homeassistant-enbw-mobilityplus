@@ -82,6 +82,19 @@ class OwnClientContractTest(unittest.TestCase):
                 with self.assertRaises(MODULE.EnBWAuthError):
                     self.client.complete_authorization(callback, auth)
 
+    def test_affinity_cookies_are_forwarded(self):
+        import httpx
+        response = httpx.Response(200, headers=[
+            ("set-cookie", "ARRAffinity=affinity; Path=/"),
+            ("set-cookie", "JSESSIONID=session; Path=/"),
+        ])
+        self.client._capture_backend_cookies(response)
+        self.client.access_token = "test"
+        headers = self.client._get_headers()
+        self.assertIn("ARRAffinity=affinity", headers["cookie"])
+        self.assertIn("JSESSIONID=session", headers["cookie"])
+        self.assertNotIn("random=value", headers["cookie"])
+
     def test_history_parsing(self):
         self.client._json = lambda *args, **kwargs: {
             "chargingHistoryEntries": [{"startedAt": "2026-11-12T10:00:00+01:00", "energyInKwh": 3.7}]
