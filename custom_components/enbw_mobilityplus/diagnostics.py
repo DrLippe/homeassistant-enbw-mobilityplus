@@ -5,6 +5,8 @@ from traceback import extract_tb
 
 import httpx
 
+from .providers.client import EnBWAuthError
+
 
 _STAGES = (
     ("Identifier submission", "Anmeldung: Benutzername"),
@@ -28,6 +30,10 @@ def diagnostic_message(exc: BaseException) -> str:
     Upstream ValueErrors can embed raw HTTP response bodies (and therefore
     personal data or tokens); never log their unfiltered text or traceback.
     """
+    if isinstance(exc, EnBWAuthError):
+        return f"EnBWAuthError – {exc.stage}" + (
+            f" (HTTP {exc.status})" if exc.status is not None else ""
+        ) + (f" ({exc.reason})" if exc.reason is not None else "")
     message = str(exc)
     stage = next((name for marker, name in _STAGES if marker in message), None)
     if isinstance(exc, httpx.TimeoutException):

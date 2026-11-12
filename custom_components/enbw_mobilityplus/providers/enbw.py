@@ -1,4 +1,4 @@
-"""EnBW mobility+ adapter around mawiak's Python client."""
+"""EnBW mobility+ provider using our first-party EnBW HTTP client."""
 
 from datetime import datetime
 import logging
@@ -6,7 +6,7 @@ from threading import RLock
 from time import monotonic
 from typing import Callable, TypeVar
 
-from enbw_mobilityplus_client import EnBWMobilityPlusClient
+from .client import EnBWMobilityPlusClient
 import httpx
 
 from ..diagnostics import diagnostic_message, is_unauthorized

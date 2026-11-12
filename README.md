@@ -48,6 +48,10 @@ On a confirmed completion the integration fires `enbw_mobilityplus_charge_comple
 
 The client is an unofficial reverse-engineered API implementation, distributed under the MIT license. This integration is not endorsed by EnBW. Use only your own account and respect the service's terms and limits. Credentials are saved in Home Assistant's config-entry storage; never share configuration backups containing credentials.
 
+## Experimental standalone client (0.3.0b1)
+
+This prototype replaces mawiak's Python package with `providers/client.py`, an independent HTTP client based on the uploaded EnBW mobility+ Android APK (v8.19.0) for the active/history API paths and Auth0 PKCE behavior. **Do not use this pre-release as a production replacement yet.** The Android application uses an interactive Auth0 browser login and a native `emob` callback. An unattended email/password form is not guaranteed to work and requires an actual EnBW account test; the prototype temporarily retains the earlier iOS compatibility OAuth parameters. No login success is claimed. The existing main branch stays unchanged until validation.
+
 ## Authentication and troubleshooting
 
 Access tokens are refreshed using the upstream client's refresh-token grant shortly before expiry (two-minute margin). If EnBW rejects a request with HTTP 401, the integration first refreshes and retries; if authorization still fails or the refresh token is invalid, it performs a new email/password login. HTTP 403 and unrelated network/server errors are **not** treated as expired tokens. Sessions and tokens live in memory; credentials remain in Home Assistant's config entry.

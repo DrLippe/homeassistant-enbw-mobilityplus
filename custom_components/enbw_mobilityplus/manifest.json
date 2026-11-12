@@ -1,11 +1,13 @@
 {
   "domain": "enbw_mobilityplus",
   "name": "EnBW mobility+",
-  "codeowners": ["@DrLippe"],
+  "codeowners": [
+    "@DrLippe"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/DrLippe/homeassistant-enbw-mobilityplus",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "requirements": ["enbw-mobilityplus-client==1.0.0"],
-  "version": "0.2.2"
+  "requirements": [],
+  "version": "0.3.0b1"
 }
