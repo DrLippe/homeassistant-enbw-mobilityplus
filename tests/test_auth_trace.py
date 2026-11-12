@@ -129,6 +129,54 @@ class TraceTests(unittest.TestCase):
         self.assertNotIn("secret_dynamic_custom_field", logs.output[0])
         self.assertIn("html_form_found=True", logs.output[0])
 
+    def test_chunked_html_without_content_length_is_inspected(self):
+        trace = module.Auth0Trace()
+        req = httpx.Request("GET", "https://myenergykey.com/u/login/identifier?state=xyz")
+        html = '<html><form action="/u/login/identifier"><input name="state"></form></html>'
+        response = httpx.Response(
+            200, request=req, text=html,
+            headers={"content-type": "text/html; charset=utf-8", "transfer-encoding": "chunked"},
+        )
+        trace(response)
+        self.assertEqual(trace._html_inspection, "inspected")
+        self.assertEqual(len(trace._form_actions), 1)
+        self.assertEqual(response.text, html)
+
+    def test_javascript_shell_is_distinguished_from_uninspected(self):
+        trace = module.Auth0Trace()
+        req = httpx.Request("GET", "https://myenergykey.com/u/login/identifier?state=xyz")
+        trace(httpx.Response(
+            200, request=req,
+            text='<html><div id="root"></div><script src="/login.js"></script></html>',
+            headers={"content-type": "text/html"},
+        ))
+        self.assertEqual(trace._html_inspection, "inspected")
+        self.assertEqual(trace._form_actions, [])
+        self.assertTrue(trace._javascript_present)
+        self.assertTrue(trace._app_root_present)
+        post = httpx.Request(
+            "POST", "https://myenergykey.com/u/login/identifier?state=xyz",
+            data={"state": "xyz", "username": "private@example.com"},
+        )
+        with self.assertLogs(module._LOGGER.name, level="WARNING") as logs:
+            trace(httpx.Response(400, request=post, text="private"))
+        message = logs.output[0]
+        self.assertIn("html_inspection=inspected", message)
+        self.assertIn("html_form_found=False", message)
+        self.assertIn("javascript_present=True", message)
+        self.assertIn("app_root_present=True", message)
+        self.assertNotIn("private@example.com", message)
+
+    def test_non_html_is_reported_as_not_inspected(self):
+        trace = module.Auth0Trace()
+        req = httpx.Request("GET", "https://myenergykey.com/u/login/identifier?state=xyz")
+        trace(httpx.Response(
+            200, request=req, text='{"challenge":"hidden"}',
+            headers={"content-type": "application/json"},
+        ))
+        self.assertEqual(trace._html_inspection, "non_html")
+        self.assertIsNone(trace._form_actions)
+
     def test_hook_installed_only_once_per_client(self):
         client = Mock()
         client.client.event_hooks = {"response": []}

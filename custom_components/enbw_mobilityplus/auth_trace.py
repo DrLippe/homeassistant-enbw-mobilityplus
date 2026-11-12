@@ -2,7 +2,7 @@
 
 Only fixed step names, HTTP statuses and booleans are logged. The request's
 OAuth state values are compared ephemerally in memory but never persisted.
-Neither request nor response bodies are logged.
+Response HTML can be inspected in memory, but is never logged.
 """
 from __future__ import annotations
 
@@ -62,6 +62,8 @@ class _LoginFormParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.fields = set()
         self.actions = []
+        self.has_script = False
+        self.has_app_root = False
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
@@ -71,6 +73,10 @@ class _LoginFormParser(HTMLParser):
                 self.fields.add(name)
         elif tag == "form":
             self.actions.append(attrs.get("action", ""))
+        elif tag == "script":
+            self.has_script = True
+        elif tag in ("div", "main") and attrs.get("id") in ("root", "app", "auth0-lock-container"):
+            self.has_app_root = True
 
 
 class Auth0Trace:
@@ -83,6 +89,9 @@ class Auth0Trace:
         self._last_page_url: str | None = None
         self._form_fields: set[str] | None = None
         self._form_actions: list[str] | None = None
+        self._html_inspection = "not_attempted"
+        self._javascript_present = False
+        self._app_root_present = False
 
     def __call__(self, response) -> None:
         request = response.request
@@ -100,6 +109,9 @@ class Auth0Trace:
             self._last_page_url = None
             self._form_fields = None
             self._form_actions = None
+            self._html_inspection = "not_attempted"
+            self._javascript_present = False
+            self._app_root_present = False
 
         if request.method == "GET" and status == 200:
             self._last_page_step = step
@@ -107,24 +119,36 @@ class Auth0Trace:
             self._last_page_url = str(url)
             self._form_fields = None
             self._form_actions = None
-            # HTTPX response hooks run before the body is consumed. Reading a
-            # small HTML response populates httpx's cache so the upstream
-            # client can still access the identical body afterwards.
-            if (
-                url.path.startswith("/u/login/")
-                and "text/html" in response.headers.get("content-type", "").lower()
-                and response.headers.get("content-length", "").isdigit()
-                and 0 < int(response.headers["content-length"]) <= 262144
-            ):
-                try:
-                    raw = response.read()
-                    if len(raw) <= 262144:
-                        parser = _LoginFormParser()
-                        parser.feed(raw.decode("utf-8", "replace"))
-                        self._form_fields = parser.fields
-                        self._form_actions = parser.actions
-                except (ValueError, RuntimeError, UnicodeError):
-                    pass
+            # The upstream client uses a normal (non-streaming) HTTPX request.
+            # The response hook runs before the client reads response.text.
+            # HTTPX caches response.read(), preserving its content for mawiak.
+            if url.path.startswith("/u/login/"):
+                content_type = response.headers.get("content-type", "").lower()
+                if "text/html" not in content_type:
+                    self._html_inspection = "non_html"
+                else:
+                    length = response.headers.get("content-length", "")
+                    if length.isdigit() and int(length) > 262144:
+                        self._html_inspection = "too_large"
+                    else:
+                        try:
+                            # Some Auth0 HTML is chunked or compressed and has
+                            # no Content-Length. Inspect it anyway, with a
+                            # conservative maximum accepted HTML size.
+                            raw = response.read()
+                            if len(raw) > 262144:
+                                self._html_inspection = "too_large"
+                            else:
+                                parser = _LoginFormParser()
+                                parser.feed(raw.decode("utf-8", "replace"))
+                                self._form_fields = parser.fields
+                                self._form_actions = parser.actions
+                                self._javascript_present = parser.has_script
+                                self._app_root_present = parser.has_app_root
+                                self._html_inspection = "inspected"
+                        except Exception:
+                            # Diagnostics may never interrupt authentication.
+                            self._html_inspection = "read_error"
 
         if step in ("identifier", "password") and request.method == "POST" and status >= 400:
             # These names are fixed. No email, password, token, URL or raw state
@@ -181,7 +205,8 @@ class Auth0Trace:
                 "previous_page=%s, page_state_matches_query=%s, "
                 "cookie_present=%s, referer_matches_request=%s, "
                 "referer_matches_actual_page=%s, html_form_found=%s, "
-                "form_action_matches_post=%s, expected_fields_missing=%s",
+                "form_action_matches_post=%s, expected_fields_missing=%s, "
+                "html_inspection=%s, javascript_present=%s, app_root_present=%s",
                 status, step,
                 bool(self._initial_state), bool(query_state), bool(body_state),
                 bool(query_state and self._initial_state and query_state == self._initial_state),
@@ -194,6 +219,9 @@ class Auth0Trace:
                 bool(self._form_actions),
                 form_action_matches,
                 missing_known_fields,
+                self._html_inspection,
+                self._javascript_present,
+                self._app_root_present,
             )
             return
 

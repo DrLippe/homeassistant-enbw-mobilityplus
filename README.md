@@ -82,3 +82,12 @@ Cookie presence and Referer consistency. These comparisons happen only in memory
 no state values, passwords, session cookies, request/response bodies, or raw
 URLs are written to logs. Restart Home Assistant and perform one login attempt.
 The integration still uses mawiak 1.0.1 unchanged. This is diagnostic only.
+
+### HTML inspection diagnostic fields
+
+When Auth0 responds HTTP 400 at identifier/password, the diagnostic now reports
+`html_inspection=inspected|non_html|too_large|read_error|not_attempted`,
+`javascript_present`, `app_root_present`, and `html_form_found`. The response
+HTML is analyzed only in memory, never logged. HTML without Content-Length is
+also inspected. `javascript_present=True` indicates script markup, not proof
+that a particular script generated the form. These are diagnostics, not a fix.
