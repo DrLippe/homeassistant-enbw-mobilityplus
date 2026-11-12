@@ -78,6 +78,57 @@ class TraceTests(unittest.TestCase):
             module.Auth0Trace()(response)
         warning.assert_not_called()
 
+    def test_actual_html_form_and_referer_diagnostics(self):
+        trace = module.Auth0Trace()
+        secret = "SECRET_PRIVATE"
+        html = (
+            '<html><form action="/u/login/identifier" method="post">'
+            '<input name="username"><input type="hidden" name="state" value="' + secret + '">'
+            '<input name="_csrf" value="' + secret + '"></form></html>'
+        )
+        get_request = httpx.Request(
+            "GET", "https://myenergykey.com/u/login/identifier?state=" + secret
+        )
+        trace(httpx.Response(
+            200, request=get_request, text=html,
+            headers={"content-type": "text/html"},
+        ))
+        request = httpx.Request(
+            "POST", "https://myenergykey.com/u/login/identifier?state=" + secret,
+            data={"state": secret, "username": "demo@example.com"},
+            headers={
+                "Referer": "https://myenergykey.com/u/login/identifier?state=" + secret,
+            },
+        )
+        with self.assertLogs(module._LOGGER.name, level="WARNING") as logs:
+            trace(httpx.Response(400, request=request, text="hidden-error-" + secret))
+        line = logs.output[0]
+        self.assertIn("referer_matches_actual_page=True", line)
+        self.assertIn("html_form_found=True", line)
+        self.assertIn("form_action_matches_post=True", line)
+        self.assertIn("expected_fields_missing=True", line)
+        self.assertNotIn(secret, line)
+        self.assertNotIn("demo@example.com", line)
+
+    def test_html_parser_does_not_publish_unknown_field_names(self):
+        trace = module.Auth0Trace()
+        page = httpx.Request(
+            "GET", "https://myenergykey.com/u/login/identifier?state=s"
+        )
+        trace(httpx.Response(
+            200, request=page,
+            text='<form action="/u/login/identifier"><input name="secret_dynamic_custom_field"></form>',
+            headers={"content-type": "text/html"},
+        ))
+        request = httpx.Request(
+            "POST", "https://myenergykey.com/u/login/identifier?state=s",
+            data={"state": "s"},
+        )
+        with self.assertLogs(module._LOGGER.name, level="WARNING") as logs:
+            trace(httpx.Response(400, request=request))
+        self.assertNotIn("secret_dynamic_custom_field", logs.output[0])
+        self.assertIn("html_form_found=True", logs.output[0])
+
     def test_hook_installed_only_once_per_client(self):
         client = Mock()
         client.client.event_hooks = {"response": []}
