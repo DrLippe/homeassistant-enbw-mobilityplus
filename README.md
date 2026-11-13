@@ -69,3 +69,12 @@ logic and all existing charging-history and live-session features are unchanged.
 A one-time, opt-in runtime comparison is available at DEBUG level under
 `custom_components.enbw_mobilityplus.providers.enbw`; no credentials, session
 cookies or tokens are logged. The integration manifest remains at v0.2.4.
+
+## Polling schedule (v0.2.5)
+
+The update schedule matches the EWE Go integration: active-session requests every
+**30 seconds while charging**, and every **5 minutes when idle**. Charging
+history refreshes every **60 minutes**, plus on initial setup and when charging
+completion has been confirmed by two consecutive empty live responses. The
+history coordinator remains independent of the live coordinator, and failed
+live API requests do not get mistaken for an ended session.

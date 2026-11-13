@@ -7,7 +7,7 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, LIVE_POLL_INTERVAL, POLL_INTERVAL
+from .const import ACTIVE_POLL_INTERVAL, DOMAIN, LIVE_POLL_INTERVAL, POLL_INTERVAL
 from .diagnostics import diagnostic_message
 from .providers.enbw import EnBWProvider
 
@@ -34,9 +34,10 @@ class ChargeCoordinator(DataUpdateCoordinator):
 class LiveCoordinator(DataUpdateCoordinator):
     """Poll active charging independently of the expensive historical fetch."""
 
-    def __init__(self, hass: HomeAssistant, provider: EnBWProvider, name: str) -> None:
+    def __init__(self, hass: HomeAssistant, provider: EnBWProvider, name: str, history: ChargeCoordinator) -> None:
         super().__init__(hass, logger=_LOGGER, name=f"{name} live", update_interval=LIVE_POLL_INTERVAL)
         self.provider = provider
+        self.history = history
         self.status = "idle"
         self._previous_ids: set[str] = set()
         self._empty_polls = 0
@@ -49,6 +50,10 @@ class LiveCoordinator(DataUpdateCoordinator):
             _LOGGER.error("EnBW mobility+ Live-Abfrage fehlgeschlagen: %s", detail)
             raise UpdateFailed(f"EnBW Live-Abfrage: {detail}") from None
 
+        # Match EWE Go: 30 s during charging, 5 min otherwise.
+        self.update_interval = (
+            ACTIVE_POLL_INTERVAL if snapshot.sessions or self._previous_ids else LIVE_POLL_INTERVAL
+        )
         ids = {session.transaction_id for session in snapshot.sessions if session.transaction_id}
         if snapshot.sessions:
             self.status = "active"
@@ -66,6 +71,14 @@ class LiveCoordinator(DataUpdateCoordinator):
                         {"transaction_id": transaction_id},
                     )
                 self._previous_ids.clear()
+                self.update_interval = LIVE_POLL_INTERVAL
+                # Refresh history promptly after the second empty live poll.
+                # History also retains its independent hourly schedule.
+                try:
+                    await self.history.async_request_refresh()
+                except Exception:
+                    # History refresh problems must not invalidate valid live data.
+                    _LOGGER.debug("EnBW history refresh after charge completion failed", exc_info=True)
         elif self.status != "completed":
             self.status = "idle"
         return snapshot
@@ -74,7 +87,7 @@ class LiveCoordinator(DataUpdateCoordinator):
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     provider = EnBWProvider(entry.data[CONF_EMAIL], entry.data[CONF_PASSWORD])
     coordinator = ChargeCoordinator(hass, provider, entry.title)
-    live = LiveCoordinator(hass, provider, entry.title)
+    live = LiveCoordinator(hass, provider, entry.title, coordinator)
     try:
         await coordinator.async_config_entry_first_refresh()
         # An undocumented live endpoint must not break existing history sensors.
