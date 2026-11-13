@@ -1,17 +1,25 @@
 """EnBW mobility+ charging history integration."""
 
 import logging
+from pathlib import Path
+
+import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryNotReady
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
+from homeassistant.components.http import StaticPathConfig
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.event import async_track_time_change
+from homeassistant.util import dt as dt_util
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import ACTIVE_POLL_INTERVAL, DOMAIN, LIVE_POLL_INTERVAL, POLL_INTERVAL
 from .diagnostics import diagnostic_message
 from .providers.enbw import EnBWProvider
+from .tariff import next_tariff_date
 
-PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR]
+PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -98,7 +106,58 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady("EnBW mobility+ login/API unavailable; will retry") from exc
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"history": coordinator, "live": live}
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # A calendar-day boundary changes the three-complete-month calculation,
+    # without requiring any additional EnBW API requests.
+    entry.async_on_unload(
+        async_track_time_change(
+            hass, lambda now: coordinator.async_update_listeners(),
+            hour=0, minute=0, second=5,
+        )
+    )
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+
+    if not hass.data.get(f"{DOMAIN}_frontend_registered"):
+        await hass.http.async_register_static_paths([
+            StaticPathConfig(
+                "/enbw-mobilityplus/enbw-tariff-card.js",
+                str(Path(__file__).parent / "www" / "enbw-tariff-card.js"),
+                cache_headers=False,
+            )
+        ])
+        hass.data[f"{DOMAIN}_frontend_registered"] = True
+
+    if not hass.services.has_service(DOMAIN, "record_tariff_change"):
+        async def record_tariff_change(call):
+            configured = hass.config_entries.async_entries(DOMAIN)
+            target_id = call.data.get("config_entry_id")
+            targets = [e for e in configured if e.entry_id == target_id] if target_id else configured
+            if len(targets) != 1:
+                raise HomeAssistantError("Bitte genau ein EnBW-Konto auswählen (config_entry_id)")
+            selected = targets[0]
+            today = dt_util.now().date()
+            hass.config_entries.async_update_entry(
+                selected,
+                options={
+                    **selected.options,
+                    "current_tariff": call.data["tariff"],
+                    "tariff_started_on": today.isoformat(),
+                    "tariff_next_switch_on": next_tariff_date(today).isoformat(),
+                },
+            )
+
+        hass.services.async_register(
+            DOMAIN, "record_tariff_change", record_tariff_change,
+            schema=vol.Schema({
+                vol.Required("tariff"): vol.In(["S", "M", "L"]),
+                vol.Optional("config_entry_id"): str,
+            }),
+        )
     return True
+
+
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -106,4 +165,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
     coordinators = hass.data[DOMAIN].pop(entry.entry_id)
     await hass.async_add_executor_job(coordinators["history"].provider.close)
+    if not hass.data[DOMAIN] and hass.services.has_service(DOMAIN, "record_tariff_change"):
+        hass.services.async_remove(DOMAIN, "record_tariff_change")
     return True

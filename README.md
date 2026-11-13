@@ -24,11 +24,11 @@ The integration includes the EnBW mobility+ app icon in `custom_components/enbw_
 | Last station | Address of newest completed session |
 | Last duration | Duration of newest completed session, minutes |
 
-Data is refreshed every 30 minutes. History pagination is capped at 10,000 records as a safety limit. Totals reflect the history returned by EnBW, not necessarily all lifetime consumption if EnBW truncates its history. A sensor will be unavailable if its initial fetch fails.
+Data is refreshed every 60 minutes. History pagination is capped at 10,000 records as a safety limit. Totals reflect the history returned by EnBW, not necessarily all lifetime consumption if EnBW truncates its history. A sensor will be unavailable if its initial fetch fails.
 
 ### Active charging monitor
 
-The integration additionally polls `GET /v2/chargings/active` every 60 seconds, as identified in the EnBW Android application. It provides:
+The integration additionally polls `GET /v2/chargings/active` every 30 seconds during active charging and every 5 minutes when idle, as identified in the EnBW Android application. It provides:
 
 - **Ladevorgang aktiv** (binary sensor), true when the API reports at least one active session
 - **Ladestatus** (`Inaktiv`, `Aktiv`, `Ende wird geprüft`, `Beendet`). `Beendet` requires two consecutive successful empty monitor responses following a previously active session; it remains until another session starts, but resets after a restart
@@ -68,7 +68,7 @@ that login succeeds without it in Home Assistant. The upstream client's OAuth
 logic and all existing charging-history and live-session features are unchanged.
 A one-time, opt-in runtime comparison is available at DEBUG level under
 `custom_components.enbw_mobilityplus.providers.enbw`; no credentials, session
-cookies or tokens are logged. The integration manifest remains at v0.2.4.
+cookies or tokens are logged. The integration introduced this reliable login behavior in v0.2.4.
 
 ## Polling schedule (v0.2.5)
 
@@ -78,3 +78,58 @@ history refreshes every **60 minutes**, plus on initial setup and when charging
 completion has been confirmed by two consecutive empty live responses. The
 history coordinator remains independent of the live coordinator, and failed
 live API requests do not get mistaken for an ended session.
+
+
+## Tariff card (v0.3.0)
+
+The optional **EnBW tariff comparison** is adapted from
+[sluggyly1991/enbw-mobilityplus-homeassistant](https://github.com/sluggyly1991/enbw-mobilityplus-homeassistant)
+under the MIT license. Copyright and licensing terms are retained in
+`custom_components/enbw_mobilityplus/LICENSE.upstream`. The dashboard card is
+bundled in the integration; there is no additional HACS installation for it.
+
+1. Update the integration to 0.3.0 and restart Home Assistant.
+2. Open **Settings → Devices & services → EnBW mobility+ → Configure** and select
+   your current S, M, or L tariff. Check the monthly base fees and ct/kWh for all
+   three tiers and **confirm the tariff prices' verification date**. Optional
+   switch dates may be entered here as well. The prices are example defaults,
+   not official live EnBW tariff data, and may be obsolete.
+3. Add a **Dashboard resource** (JavaScript module) at:
+   `/enbw-mobilityplus/enbw-tariff-card.js?v=0.3.0`.
+4. Add a manual dashboard card (replace both example entity IDs with the actual
+   entities listed on your EnBW device):
+
+```yaml
+type: custom:enbw-tariff-card
+entity: sensor.replace_with_tarifwechsel
+refresh_entity: button.replace_with_historie_aktualisieren
+language: de
+```
+
+The integration provides a **Tarifwechsel** sensor plus numeric **Tarifwechsel
+Ersparnis**, **Tarifwechsel Wechselgrenze**, **Tarifwechsel Monatsverbrauch**, and
+**Historie aktualisieren** button. The custom card reads the recommendation's
+attributes, supports manually recording a current S/M/L plan and shows costs,
+monthly savings and the calculated break-even threshold. Recording a tariff
+change updates only Home Assistant settings; it **does not change the real
+EnBW contract**. On multi-account installations, the card's recommendation
+attributes identify the relevant config entry automatically.
+
+The conservative tariff recommendation uses the three most recently completed
+**local** calendar months, requires a historical entry before that window and
+includes only EnBW-operated German EVSEs (prefix `DE*EBW*`). If the API history
+cannot prove complete coverage, price data is over 31 days old, or tariffs
+are invalid, the state is **Prüfen** (no advice). This historical cost projection
+is not a promise of future savings. Tariff and dashboard calculations do not
+request additional EnBW data. History polling remains hourly, with an additional
+refresh when a charging session ends or when the button is pressed.
+
+### Native dashboard examples
+
+The `examples` directory includes `monthly-overview.yaml`,
+`recent-charges.yaml`, and `charging-overview.yaml`. The integration
+provides four local-month sensors (energy, cost, count and effective EUR/kWh)
+and a `Ladehistorie` sensor whose `sessions` attribute contains at most
+50 recently completed sessions. Missing session prices stay unknown rather
+than being estimated. These native cards work independently of the JavaScript
+tariff card and do not make extra EnBW API calls.

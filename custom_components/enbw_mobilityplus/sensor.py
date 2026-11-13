@@ -1,6 +1,7 @@
 """EnBW mobility+ charging metrics."""
 
 from dataclasses import dataclass
+from homeassistant.util import dt as dt_util
 from typing import Callable
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription, SensorStateClass
@@ -15,6 +16,8 @@ from . import ChargeCoordinator, LiveCoordinator
 from .const import DOMAIN
 from .charge_type import normalize_charge_type
 from .model import LiveSnapshot, ProviderSnapshot
+from .tariff_adapter import tariff_comparison
+from .monthly import month_summary, recent_sessions
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -47,7 +50,7 @@ LIVE_SENSORS = (
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinators = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([ChargeSensor(coordinators["history"], entry, description) for description in SENSORS] + [LiveChargeSensor(coordinators["live"], entry, description) for description in LIVE_SENSORS] + [EnBWChargeTypeSensor(coordinators["history"], coordinators["live"], entry)])
+    async_add_entities([ChargeSensor(coordinators["history"], entry, description) for description in SENSORS] + [LiveChargeSensor(coordinators["live"], entry, description) for description in LIVE_SENSORS] + [EnBWChargeTypeSensor(coordinators["history"], coordinators["live"], entry)] + [TariffSensor(coordinators["history"], entry, key, name, unit) for key, name, unit in TARIFF_SENSORS] + [MonthlySensor(coordinators["history"], entry, key, name, unit) for key, name, unit in MONTHLY_SENSORS] + [RecentHistorySensor(coordinators["history"], entry)])
 
 
 class ChargeSensor(CoordinatorEntity[ChargeCoordinator], SensorEntity):
@@ -150,3 +153,103 @@ class EnBWChargeTypeSensor(SensorEntity):
     def extra_state_attributes(self):
         raw, source = self._source()
         return {"api_wert": raw, "datenquelle": source}
+
+
+TARIFF_SENSORS = (
+    ("recommendation", "Tarifwechsel", None),
+    ("monthly_savings", "Tarifwechsel Ersparnis", "EUR"),
+    ("break_even_kwh", "Tarifwechsel Wechselgrenze", "kWh"),
+    ("average_energy", "Tarifwechsel Monatsverbrauch", "kWh"),
+)
+
+
+class TariffSensor(CoordinatorEntity[ChargeCoordinator], SensorEntity):
+    """Derive S/M/L comparison from the existing history snapshot, without API calls."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:calculator-variant"
+
+    def __init__(self, coordinator: ChargeCoordinator, entry: ConfigEntry, key: str, name: str, unit: str | None):
+        super().__init__(coordinator)
+        self.key = key
+        self.entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_tariff_{key}"
+        self._attr_name = name
+        self._attr_native_unit_of_measurement = unit
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.title,
+            manufacturer="EnBW",
+            model="Charging account",
+        )
+
+    @property
+    def _result(self) -> dict:
+        return tariff_comparison(self.coordinator.data, dt_util.now(), dict(self.entry.options))
+
+    @property
+    def native_value(self):
+        return self._result.get(self.key)
+
+    @property
+    def extra_state_attributes(self):
+        return {**self._result, "config_entry_id": self.entry.entry_id}
+
+
+MONTHLY_SENSORS = (
+    ("energy", "Monat Energie", "kWh"),
+    ("cost", "Monat Kosten", "EUR"),
+    ("count", "Monat Ladevorgänge", None),
+    ("price", "Monat Durchschnittspreis", "EUR/kWh"),
+)
+
+
+class MonthlySensor(CoordinatorEntity[ChargeCoordinator], SensorEntity):
+    """Calendar-month totals calculated from downloaded history."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator: ChargeCoordinator, entry: ConfigEntry, key: str, name: str, unit: str | None):
+        super().__init__(coordinator)
+        self.key = key
+        self._attr_unique_id = f"{entry.entry_id}_month_{key}"
+        self._attr_name = name
+        self._attr_native_unit_of_measurement = unit
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.title,
+            manufacturer="EnBW",
+            model="Charging account",
+        )
+
+    @property
+    def native_value(self):
+        return month_summary(self.coordinator.data, dt_util.now())[self.key]
+
+
+class RecentHistorySensor(CoordinatorEntity[ChargeCoordinator], SensorEntity):
+    """Last 50 completed sessions for the native Lovelace markdown example."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Ladehistorie"
+    _attr_icon = "mdi:history"
+    # The full details are displayed live in dashboards; avoid recorder bloat.
+    _unrecorded_attributes = frozenset({"sessions"})
+
+    def __init__(self, coordinator: ChargeCoordinator, entry: ConfigEntry):
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_charging_history"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.title,
+            manufacturer="EnBW",
+            model="Charging account",
+        )
+
+    @property
+    def native_value(self):
+        return self.coordinator.data.total_sessions
+
+    @property
+    def extra_state_attributes(self):
+        return {"sessions": recent_sessions(self.coordinator.data, 50)}

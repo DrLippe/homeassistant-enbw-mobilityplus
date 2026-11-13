@@ -1,0 +1,18 @@
+# Native Home Assistant card - adapt the entity IDs.
+type: vertical-stack
+cards:
+  - type: entities
+    title: EnBW mobility+ – Überblick
+    entities:
+      - entity: binary_sensor.replace_with_ladevorgang_aktiv
+      - entity: sensor.replace_with_ladestatus
+      - entity: sensor.replace_with_gesamte_ladeenergie
+      - entity: sensor.replace_with_gesamtkosten
+      - entity: sensor.replace_with_letzter_ladevorgang
+      - entity: sensor.replace_with_letzte_ladeenergie
+      - entity: sensor.replace_with_letzte_ladekosten
+      - entity: sensor.replace_with_tarifwechsel
+      - entity: sensor.replace_with_tarifwechsel_ersparnis
+  - type: tile
+    entity: button.replace_with_historie_aktualisieren
+    name: Historie aktualisieren

@@ -1,0 +1,7 @@
+# Register the resource /enbw-mobilityplus/enbw-tariff-card.js?v=0.3.0
+# as a JavaScript module under Dashboard resources first.
+# Replace entity IDs with those on your EnBW device.
+type: custom:enbw-tariff-card
+entity: sensor.replace_with_tarifwechsel
+refresh_entity: button.replace_with_historie_aktualisieren
+language: de

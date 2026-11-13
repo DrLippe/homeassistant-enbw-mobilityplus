@@ -1,0 +1,17 @@
+# Native cards: replace all entity IDs with your EnBW device entity IDs.
+type: grid
+columns: 2
+square: false
+cards:
+  - type: tile
+    entity: sensor.replace_with_monat_energie
+    name: Aktueller Monat · Energie
+  - type: tile
+    entity: sensor.replace_with_monat_kosten
+    name: Aktueller Monat · Kosten
+  - type: tile
+    entity: sensor.replace_with_monat_ladevorgange
+    name: Aktueller Monat · Ladevorgänge
+  - type: tile
+    entity: sensor.replace_with_monat_durchschnittspreis
+    name: Aktueller Monat · Ø Preis

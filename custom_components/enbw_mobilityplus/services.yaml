@@ -1,0 +1,20 @@
+record_tariff_change:
+  name: Tarifwechsel speichern
+  description: Speichert den gewählten S/M/L-Tarif und den Wechseltermin nur in Home Assistant; kein realer EnBW-Vertragswechsel.
+  fields:
+    tariff:
+      name: Neuer Tarif
+      description: Aktuell gewählter Tarif bei EnBW.
+      required: true
+      selector:
+        select:
+          options:
+            - S
+            - M
+            - L
+    config_entry_id:
+      name: EnBW-Konto
+      description: Optional, bei mehreren EnBW-Konten erforderlich.
+      required: false
+      selector:
+        text: {}

@@ -1,0 +1,16 @@
+# Home Assistant native Markdown card. Replace the history entity ID.
+type: markdown
+content: |
+  {% set entity = 'sensor.replace_with_ladehistorie' %}
+  {% set rows = state_attr(entity, 'sessions') or [] %}
+  {% if not has_value(entity) %}
+  EnBW-Ladehistorie derzeit nicht verfügbar.
+  {% elif not rows %}
+  Keine abgeschlossenen Ladevorgänge vorhanden.
+  {% else %}
+  | Datum / Ladestation | kWh | € |
+  | :--- | ---: | ---: |
+  {% for row in rows %}
+  | {{ as_timestamp(row.started_at) | timestamp_custom('%d.%m.%y %H:%M', true) }} · {{ (row.address or 'Unbekannt') | e }} | {{ '%.2f' | format(row.energy_in_kwh | float(0)) }} | {{ '%.2f' | format(row.total_costs_in_eur) if row.total_costs_in_eur is not none else '—' }} |
+  {% endfor %}
+  {% endif %}
