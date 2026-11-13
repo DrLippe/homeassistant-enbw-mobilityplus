@@ -91,3 +91,7 @@ When Auth0 responds HTTP 400 at identifier/password, the diagnostic now reports
 HTML is analyzed only in memory, never logged. HTML without Content-Length is
 also inspected. `javascript_present=True` indicates script markup, not proof
 that a particular script generated the form. These are diagnostics, not a fix.
+
+## 0.2.4 – controlled authentication environment test
+
+This diagnostic release temporarily disables the passive Auth0 HTTPX response hook during mawiak client login. The original mawiak 1.0.1 authentication path remains unchanged. Once per Home Assistant process, `custom_components.enbw_mobilityplus.providers.enbw` logs the loaded Python, mawiak, HTTPX and HTTPCore versions (plus `auth_trace=disabled`), without exposing email addresses, passwords, cookies, URLs or tokens. After updating/restarting Home Assistant, attempt login once and compare these versions to the working Windows environment (Python 3.14.3, mawiak 1.0.1, HTTPX 0.28.1, HTTPCore 1.0.9). This change does not yet establish the cause of HTTP 400 or guarantee authentication success.

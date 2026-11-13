@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import types
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1] / "custom_components" / "enbw_mobilityplus"
@@ -50,6 +50,30 @@ class ActiveMonitorTest(unittest.TestCase):
         provider = self.adapter.EnBWProvider("example@example.com", "test")
         provider._client = client
         return provider, client
+
+    def test_login_without_auth_trace_hook(self):
+        """Client construction must match the successful standalone script."""
+        adapter = self.adapter
+        client = Mock()
+        client.login.return_value.expires_in = 3600
+        with patch.object(adapter, "EnBWMobilityPlusClient", return_value=client), \
+             patch.object(adapter, "_log_runtime_versions"):
+            provider = adapter.EnBWProvider("example@example.com", "password")
+            self.assertIs(provider._ensure_login(), client)
+        client.login.assert_called_once_with("example@example.com", "password")
+        provider.close()
+
+    def test_runtime_report_once(self):
+        adapter = self.adapter
+        adapter._log_runtime_versions.cache_clear()
+        with unittest.mock.patch.object(adapter, "_LOGGER") as logger:
+            adapter._log_runtime_versions()
+            adapter._log_runtime_versions()
+            logger.warning.assert_called_once()
+            logged_args = logger.warning.call_args.args
+            self.assertIn("auth_trace=disabled", logged_args[0])
+            self.assertEqual(len(logged_args), 5)
+        adapter._log_runtime_versions.cache_clear()
 
     def test_active_session_fields_and_url(self):
         response = Mock()

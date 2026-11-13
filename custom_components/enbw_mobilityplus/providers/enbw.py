@@ -1,7 +1,10 @@
 """EnBW mobility+ adapter around mawiak's Python client."""
 
 from datetime import datetime
+from functools import lru_cache
+from importlib.metadata import PackageNotFoundError, version
 import logging
+from platform import python_version
 from threading import RLock
 from time import monotonic
 from typing import Callable, TypeVar
@@ -9,13 +12,32 @@ from typing import Callable, TypeVar
 from enbw_mobilityplus_client import EnBWMobilityPlusClient
 import httpx
 
-from ..auth_trace import attach_auth0_trace
 from ..diagnostics import diagnostic_message, is_unauthorized
 from ..model import ActiveCharge, ChargeSession, LiveSnapshot, ProviderSnapshot
 
 T = TypeVar("T")
 _REFRESH_MARGIN_SECONDS = 120
 _LOGGER = logging.getLogger(__name__)
+
+
+def _package_version(package: str) -> str:
+    try:
+        return version(package)
+    except PackageNotFoundError:
+        return "not_installed"
+
+
+@lru_cache(maxsize=1)
+def _log_runtime_versions() -> None:
+    """Record only software versions once per HA process, never account data."""
+    _LOGGER.warning(
+        "EnBW login environment: Python=%s, mawiak=%s, httpx=%s, httpcore=%s, "
+        "auth_trace=disabled",
+        python_version(),
+        _package_version("enbw-mobilityplus-client"),
+        _package_version("httpx"),
+        _package_version("httpcore"),
+    )
 
 
 def _timestamp(value: str | None) -> datetime | None:
@@ -36,8 +58,8 @@ class EnBWProvider:
 
     def _ensure_login(self) -> EnBWMobilityPlusClient:
         if self._client is None:
+            _log_runtime_versions()
             client = EnBWMobilityPlusClient()
-            attach_auth0_trace(client)
             try:
                 token = client.login(self.email, self.password)
             except Exception:
