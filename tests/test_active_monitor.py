@@ -69,8 +69,8 @@ class ActiveMonitorTest(unittest.TestCase):
         with unittest.mock.patch.object(adapter, "_LOGGER") as logger:
             adapter._log_runtime_versions()
             adapter._log_runtime_versions()
-            logger.warning.assert_called_once()
-            logged_args = logger.warning.call_args.args
+            logger.debug.assert_called_once()
+            logged_args = logger.debug.call_args.args
             self.assertIn("auth_trace=disabled", logged_args[0])
             self.assertEqual(len(logged_args), 5)
         adapter._log_runtime_versions.cache_clear()

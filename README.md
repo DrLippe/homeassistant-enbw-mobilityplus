@@ -60,38 +60,12 @@ logger:
     custom_components.enbw_mobilityplus: debug
 ```
 
-## Auth0 diagnostics (experimental branch)
+## Release v0.2.4 – stable mawiak authentication
 
-On branch `auth0-safe-diagnostics`, the existing mawiak client (v1.0.1) remains responsible for authentication. An HTTPX response hook reports the HTTP status and a fixed, allow-listed authentication step at INFO/DEBUG or WARNING level. Redirect targets are classified without exposing raw URLs. The hook does not inspect response bodies, request bodies, query strings, passwords, cookies, or tokens.
-
-To investigate HTTP 400 in Home Assistant, enable debug logging for `custom_components.enbw_mobilityplus.auth_trace` and perform **one** setup attempt. Share only the sanitised `EnBW Auth0 HTTP ...` lines; do not enable unfiltered `httpx` or `httpcore` debug logs or share raw HTTP captures.
-
-```yaml
-logger:
-  logs:
-    custom_components.enbw_mobilityplus.auth_trace: debug
-```
-
-The diagnostic branch does not fix the authentication flow and is not a HACS release.
-
-### Extended Auth0 HTTP 400 diagnostics
-
-The response hook now records only boolean checks for OAuth state consistency
-(initial authorize state, request query, form and last loaded login page),
-Cookie presence and Referer consistency. These comparisons happen only in memory;
-no state values, passwords, session cookies, request/response bodies, or raw
-URLs are written to logs. Restart Home Assistant and perform one login attempt.
-The integration still uses mawiak 1.0.1 unchanged. This is diagnostic only.
-
-### HTML inspection diagnostic fields
-
-When Auth0 responds HTTP 400 at identifier/password, the diagnostic now reports
-`html_inspection=inspected|non_html|too_large|read_error|not_attempted`,
-`javascript_present`, `app_root_present`, and `html_form_found`. The response
-HTML is analyzed only in memory, never logged. HTML without Content-Length is
-also inspected. `javascript_present=True` indicates script markup, not proof
-that a particular script generated the form. These are diagnostics, not a fix.
-
-## 0.2.4 – controlled authentication environment test
-
-This diagnostic release temporarily disables the passive Auth0 HTTPX response hook during mawiak client login. The original mawiak 1.0.1 authentication path remains unchanged. Once per Home Assistant process, `custom_components.enbw_mobilityplus.providers.enbw` logs the loaded Python, mawiak, HTTPX and HTTPCore versions (plus `auth_trace=disabled`), without exposing email addresses, passwords, cookies, URLs or tokens. After updating/restarting Home Assistant, attempt login once and compare these versions to the working Windows environment (Python 3.14.3, mawiak 1.0.1, HTTPX 0.28.1, HTTPCore 1.0.9). This change does not yet establish the cause of HTTP 400 or guarantee authentication success.
+EnBW mobility+ uses the upstream `enbw-mobilityplus-client==1.0.1` directly.
+The additional Auth0 HTTPX response hook has been removed after confirming
+that login succeeds without it in Home Assistant. The upstream client's OAuth
+logic and all existing charging-history and live-session features are unchanged.
+A one-time, opt-in runtime comparison is available at DEBUG level under
+`custom_components.enbw_mobilityplus.providers.enbw`; no credentials, session
+cookies or tokens are logged. The integration manifest remains at v0.2.4.

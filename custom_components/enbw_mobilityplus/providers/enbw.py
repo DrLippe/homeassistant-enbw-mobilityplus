@@ -30,7 +30,7 @@ def _package_version(package: str) -> str:
 @lru_cache(maxsize=1)
 def _log_runtime_versions() -> None:
     """Record only software versions once per HA process, never account data."""
-    _LOGGER.warning(
+    _LOGGER.debug(
         "EnBW login environment: Python=%s, mawiak=%s, httpx=%s, httpcore=%s, "
         "auth_trace=disabled",
         python_version(),
